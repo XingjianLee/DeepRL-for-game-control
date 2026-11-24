@@ -1,0 +1,62 @@
+"""DQN with a replay buffer and a periodically synchronized target network."""
+
+from copy import deepcopy
+
+import numpy as np
+import torch
+from torch import nn
+from torch.nn import functional as F
+
+from algorithm.replay import ReplayBuffer, td_targets
+
+
+class DQN:
+    def __init__(self, observation_size, action_count):
+        self.network = nn.Sequential(
+            nn.Linear(observation_size, 64), nn.ReLU(),
+            nn.Linear(64, 64), nn.ReLU(), nn.Linear(64, action_count),
+        )
+
+    @torch.no_grad()
+    def predict(self, observation):
+        return int(self.network(torch.from_numpy(observation)).argmax())
+
+    def train(self, env, steps, seed, on_episode):
+        rng = np.random.default_rng(seed)
+        target = deepcopy(self.network)
+        optimizer = torch.optim.Adam(self.network.parameters(), lr=1e-3)
+        capacity, batch_size, warmup = 50_000, 64, 1_000
+        replay = ReplayBuffer(env.observation_space.shape, capacity)
+
+        obs, _ = env.reset(seed=seed)
+        episode_return, length = 0.0, 0
+        for step in range(1, steps + 1):
+            epsilon = max(0.05, 1.0 - 0.95 * step / max(warmup, steps * 0.5))
+            if step <= warmup or rng.random() < epsilon:
+                action = int(rng.integers(env.action_space.n))
+            else:
+                action = self.predict(obs)
+            next_obs, reward, terminated, truncated, info = env.step(action)
+            replay.add(obs, action, reward, next_obs, terminated)
+            obs = next_obs
+            episode_return += reward
+            length += 1
+
+            if step >= warmup:
+                states, actions, rewards, next_states, terminals = replay.sample(rng, batch_size)
+                chosen_q = self.network(states).gather(1, actions[:, None]).squeeze(1)
+                with torch.no_grad():
+                    next_q = target(next_states).amax(dim=1)
+                    expected_q = td_targets(rewards, next_q, terminals, 0.99)
+                loss = F.smooth_l1_loss(chosen_q, expected_q)
+                optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(self.network.parameters(), 10.0)
+                optimizer.step()
+                if step % 500 == 0:
+                    target.load_state_dict(self.network.state_dict())
+
+            if terminated or truncated:
+                on_episode(step, length, episode_return, info["score"])
+                obs, _ = env.reset()
+                episode_return, length = 0.0, 0

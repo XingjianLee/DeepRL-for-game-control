@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>简单游戏智能控制测试平台</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <script src="/dashboard.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap masthead-inner">
+      <h1><span>基于深度强化学习的简单游戏智能控制</span> 测试平台</h1>
+      <button id="refresh" type="button" class="quiet">刷新记录</button>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="selection">
+      <label>游戏<select id="game"></select></label>
+      <label>算法<select id="algorithm"></select></label>
+      <label class="run-field">训练记录<select id="run"></select></label>
+      <form class="seed-control" id="seed-form">
+        <label for="seed">关卡种子</label>
+        <div><input id="seed" type="number" min="0" max="4294967295" step="1" value="20000" required>
+          <button type="submit">设定</button></div>
+        <input id="seed-slider" type="range" min="0" max="100000" value="20000" aria-label="关卡种子滑杆">
+      </form>
+    </div>
+    <p id="error" role="alert" hidden></p>
+
+    <div class="workspace">
+      <section class="replay" aria-labelledby="replay-title">
+        <div class="section-head">
+          <h2 id="replay-title">回放</h2>
+          <div class="modes" aria-label="控制方式">
+            <button id="ai" type="button" aria-pressed="true">模型</button>
+            <button id="manual" type="button" aria-pressed="false">人工</button>
+          </div>
+        </div>
+        <dl class="live">
+          <div><dt id="score-label">分数</dt><dd id="score">—</dd></div>
+          <div><dt>累计回报</dt><dd id="reward">—</dd></div>
+          <div><dt>运行步数</dt><dd id="steps">—</dd></div>
+          <div><dt>当前动作</dt><dd id="action">—</dd></div>
+        </dl>
+        <div class="stage">
+          <img id="frame" alt="当前游戏画面" hidden>
+          <span id="stage-empty">正在读取游戏画面</span>
+        </div>
+        <div class="transport">
+          <button id="play" type="button" class="primary" disabled>开始</button>
+          <button id="single" type="button" disabled>单步</button>
+          <button id="reset" type="button">重开</button>
+          <button id="speed" type="button" aria-label="切换回放速度">1×</button>
+          <span id="status">准备中</span>
+        </div>
+        <div id="manual-controls" hidden>
+          <label for="player">玩家名</label>
+          <input id="player" maxlength="20" placeholder="玩家">
+          <p id="manual-hint" class="note"></p>
+        </div>
+      </section>
+
+      <section class="results" aria-labelledby="results-title">
+        <div class="section-head">
+          <h2 id="results-title">训练结果</h2>
+          <span id="reward-setting" class="note"></span>
+        </div>
+        <nav class="tabs" aria-label="结果视图">
+          <button type="button" data-tab="curve" aria-pressed="true">训练曲线</button>
+          <button type="button" data-tab="evaluation" aria-pressed="false">评估结果</button>
+          <button type="button" data-tab="comparison" aria-pressed="false">算法对比</button>
+          <button type="button" data-tab="leaderboard" aria-pressed="false">排行榜</button>
+        </nav>
+        <div id="result-body" aria-live="polite">
+          <p class="note">正在读取训练记录</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
