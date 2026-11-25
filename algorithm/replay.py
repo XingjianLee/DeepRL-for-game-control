@@ -32,3 +32,16 @@ class ReplayBuffer:
                 torch.from_numpy(self.rewards[indices]),
                 torch.from_numpy(self.next_observations[indices]),
                 torch.from_numpy(self.terminals[indices]))
+
+    def state_dict(self):
+        size = min(self.count, self.capacity)
+        fields = ("observations", "next_observations", "actions", "rewards", "terminals")
+        return {
+            "count": self.count,
+            "data": {name: torch.from_numpy(getattr(self, name)[:size]) for name in fields},
+        }
+
+    def load_state_dict(self, state):
+        self.count = state["count"]
+        for name, data in state["data"].items():
+            getattr(self, name)[:len(data)] = data.numpy()

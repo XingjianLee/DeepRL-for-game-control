@@ -9,9 +9,9 @@ from algorithm.actor_critic import ActorCriticAgent, collect_rollouts
 
 
 class PPO(ActorCriticAgent):
-    def train(self, env, steps, seed, on_episode):
+    def train(self, env, steps, seed, on_episode, *, checkpoints=None):
         optimizer = torch.optim.Adam(self.network.parameters(), lr=3e-4)
-        rollouts = collect_rollouts(env, self.network, steps, seed, 512, on_episode)
+        rollouts = collect_rollouts(env, self.network, steps, seed, 512, on_episode, checkpoints, optimizer)
         for observations, actions, old_log_probs, advantages, returns in rollouts:
             advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-8)
 

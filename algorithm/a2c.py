@@ -9,14 +9,15 @@ from algorithm.actor_critic import ActorCriticAgent, collect_rollouts
 
 
 class A2C(ActorCriticAgent):
-    def train(self, env, steps, seed, on_episode, *, tuned=False):
+    def train(self, env, steps, seed, on_episode, *, tuned=False, checkpoints=None):
         optimizer = torch.optim.Adam(self.network.parameters(), lr=5e-4 if tuned else 3e-4)
-        rollouts = collect_rollouts(env, self.network, steps, seed, 32, on_episode)
-        processed = 0
+        rollouts = collect_rollouts(env, self.network, steps, seed, 32, on_episode, checkpoints, optimizer)
+        processed = checkpoints.step if checkpoints else 0
+        schedule_steps = checkpoints.config["schedule_steps"] if checkpoints else steps
         entropy_weight = 0.01
         for observations, actions, _, advantages, returns in rollouts:
             if tuned:
-                progress = processed / steps
+                progress = min(processed / schedule_steps, 1.0)
                 optimizer.param_groups[0]["lr"] = 5e-4 - 4e-4 * progress
                 entropy_weight = 0.03 - 0.025 * progress
                 if len(actions) > 1:

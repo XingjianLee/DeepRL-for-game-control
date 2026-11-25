@@ -21,17 +21,23 @@ class DQN:
     def predict(self, observation):
         return int(self.network(torch.from_numpy(observation)).argmax())
 
-    def train(self, env, steps, seed, on_episode):
+    def train(self, env, steps, seed, on_episode, *, checkpoints=None):
         rng = np.random.default_rng(seed)
         target = deepcopy(self.network)
         optimizer = torch.optim.Adam(self.network.parameters(), lr=1e-3)
         capacity, batch_size, warmup = 50_000, 64, 1_000
         replay = ReplayBuffer(env.observation_space.shape, capacity)
 
-        obs, _ = env.reset(seed=seed)
-        episode_return, length = 0.0, 0
-        for step in range(1, steps + 1):
-            epsilon = max(0.05, 1.0 - 0.95 * step / max(warmup, steps * 0.5))
+        objects = dict(rng=rng, replay=replay, target=target, optimizer=optimizer)
+        if checkpoints:
+            obs, episode_return, length = checkpoints.start(env, seed, **objects)
+            start = checkpoints.step
+        else:
+            obs, _ = env.reset(seed=seed)
+            start, episode_return, length = 0, 0.0, 0
+        schedule_steps = checkpoints.config["schedule_steps"] if checkpoints else steps
+        for step in range(start + 1, steps + 1):
+            epsilon = max(0.05, 1.0 - 0.95 * step / max(warmup, schedule_steps * 0.5))
             if step <= warmup or rng.random() < epsilon:
                 action = int(rng.integers(env.action_space.n))
             else:
@@ -60,3 +66,5 @@ class DQN:
                 on_episode(step, length, episode_return, info["score"])
                 obs, _ = env.reset()
                 episode_return, length = 0.0, 0
+            if checkpoints:
+                checkpoints.save(step, env, self.network, episode_return, length, **objects)

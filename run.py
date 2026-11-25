@@ -49,7 +49,11 @@ def main():
     training.add_argument("--a2c-profile", choices=A2C_PROFILES,
                           help="A2C training settings (default: baseline)")
     training.add_argument("--steps", type=positive, nargs="+", default=[50_000])
-    training.add_argument("--seed", type=nonnegative, default=42)
+    training.add_argument("--seed", type=nonnegative, nargs="+", default=[42])
+    training.add_argument("--max-episode-steps", type=positive, help="Override the per-episode time limit")
+    training.add_argument("--level-pool-size", type=positive, help="Rotate through this many fixed environment seeds")
+    training.add_argument("--checkpoint-steps", type=positive, nargs="+", help="Save at these total interaction counts")
+    training.add_argument("--resume", type=run_directory, help="Continue from a checkpoint directory")
     training.add_argument("--output-root", type=Path, default=RUNS)
     training.add_argument("--overwrite", action="store_true", help="Replace an existing result after training succeeds")
 
@@ -58,6 +62,7 @@ def main():
     testing.add_argument("--episodes", type=positive, default=100)
     testing.add_argument("--seed", type=nonnegative, default=10_000)
     testing.add_argument("--output", type=Path, help="Write per-episode CSV for a single policy")
+    testing.add_argument("--max-episode-steps", type=positive, help="Override the evaluation time limit")
 
     playback = commands.add_parser("play", help="Play manually or replay a model")
     model = playback.add_mutually_exclusive_group()
@@ -98,29 +103,37 @@ def main():
         launch(args.runs, args.game, args.seed)
     elif args.command == "train":
         pairs = list(product(args.game, args.algorithm))
-        jobs = [(game, algorithm, steps) for game, algorithm in pairs
+        jobs = [(game, algorithm, steps, seed) for game, algorithm in pairs
                 if game != "lander-continuous" or algorithm == "sac"
-                for steps in args.steps]
+                for steps in args.steps for seed in args.seed]
         if not jobs:
             training.error("--game lander-continuous supports --algorithm sac")
-        if args.a2c_profile and not any(algorithm == "a2c" for _, algorithm, _ in jobs):
+        if args.a2c_profile and not any(algorithm == "a2c" for _, algorithm, _, _ in jobs):
             training.error("--a2c-profile requires a compatible A2C training job")
+        if args.resume and (len(jobs) != 1 or not (args.resume / "state.pt").is_file()):
+            training.error("--resume requires one training job and a checkpoint containing state.pt")
         for game, algorithm in pairs:
             if game == "lander-continuous" and algorithm != "sac":
                 print(f"Skipping {game} / {algorithm}: continuous actions require SAC.", flush=True)
-        for index, (game, algorithm, steps) in enumerate(jobs, start=1):
+        for index, (game, algorithm, steps, seed) in enumerate(jobs, start=1):
             if len(jobs) > 1:
-                print(f"[{index}/{len(jobs)}] {game} / {algorithm} / {steps:,} steps / seed {args.seed}",
+                print(f"[{index}/{len(jobs)}] {game} / {algorithm} / {steps:,} steps / seed {seed}",
                       flush=True)
             profile = args.a2c_profile if algorithm == "a2c" else None
-            train(game, algorithm, args.seed, steps, args.output_root,
-                  a2c_profile=profile, overwrite=args.overwrite)
+            try:
+                train(game, algorithm, seed, steps, args.output_root,
+                      a2c_profile=profile, overwrite=args.overwrite,
+                      max_episode_steps=args.max_episode_steps, level_pool_size=args.level_pool_size,
+                      checkpoint_steps=args.checkpoint_steps, resume=args.resume)
+            except (ValueError, FileExistsError) as error:
+                training.error(str(error))
     elif args.command == "evaluate":
         runs = args.run or [None]
         if args.output and len(runs) != 1:
             testing.error("--output requires evaluating a single policy")
         for run in runs:
-            evaluate(run, args.episodes, args.seed, game=args.game, output=args.output)
+            evaluate(run, args.episodes, args.seed, game=args.game, output=args.output,
+                     max_episode_steps=args.max_episode_steps)
     else:
         from ui.demo import play
 

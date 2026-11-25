@@ -37,8 +37,8 @@ python run.py train --game snake --algorithm ppo --steps 50000 --seed 42
 python run.py train --game snake --algorithm a2c --steps 50000 --seed 42
 ```
 
-批量训练时，游戏、算法和步数可以各列多个值。下面会依次训练 8 个组合，
-每个组合都从头训练，并使用同一个训练种子。
+批量训练时，游戏、算法、步数和训练种子都可以各列多个值。下面 8 个组合各从头训练一次，
+使用同一个训练种子。
 
 ```bash
 python run.py train --game snake flap --algorithm dqn ppo --steps 50000 500000 --seed 42
@@ -56,6 +56,29 @@ python run.py train --game snake flap --algorithm dqn ppo --steps 50000 500000 -
 
 训练种子控制环境随机序列、网络初始化，以及各算法使用的探索、采样或经验回放。
 固定种子便于复现。正式对比应为每种算法使用同一组训练种子，再用另一组固定种子独立评估。
+
+#### 贪吃蛇长局训练与续训
+
+```bash
+python run.py train --game snake --algorithm ppo --steps 5000000 --seed 12 24 36 48 60 \
+  --max-episode-steps 2000 --level-pool-size 512 --output-root runs-long
+```
+
+关卡池每轮重排，每局使用一个关卡种子。贪吃蛇选池时优先覆盖第一颗食物的 97 个可用位置。
+指定单局上限或关卡池时，默认在 50 万、100 万、200 万、300 万和 500 万步保存 checkpoint。
+可用 `--checkpoint-steps` 指定其他保存步数。做对照时，各组使用同一套保存步数。
+
+```bash
+checkpoint_root=runs-long/snake/ppo/step_5000000/seed_12_checkpoints
+python run.py evaluate --game snake --run "$checkpoint_root/step_3000000" "$checkpoint_root/step_5000000" \
+  --episodes 100 --seed 40000 --max-episode-steps 2000
+
+python run.py train --game snake --algorithm ppo --seed 12 --steps 10000000 \
+  --resume "$checkpoint_root/step_5000000" --output-root runs-long
+```
+
+对多个训练种子用同一组验证关卡比较 300 万步和 500 万步的结果。如果长局得分仍在改善，
+再逐个种子续训。续训的 `--steps` 是累计步数，并继承单局上限、关卡池和原训练日程。
 
 使用两次训练结束时输出的模型目录，在相同关卡种子上评估。
 训练会采样动作，评估 DQN 选取最大 Q 值的动作，评估 PPO、A2C 和 SAC 选取概率最高的动作。

@@ -106,6 +106,24 @@ class AlgorithmTests(unittest.TestCase):
                     self.assertEqual([row["seed"] for row in rows], [10_000, 10_001])
                     self.assertTrue(output.is_file())
 
+    def test_checkpoint_resume_matches_uninterrupted_training(self):
+        with TemporaryDirectory() as root:
+            root = Path(root)
+            for algorithm in ("ppo", "a2c", "dqn", "sac"):
+                with self.subTest(algorithm=algorithm):
+                    uninterrupted = train(
+                        "snake", algorithm, 12, 1_113, root / "full",
+                        max_episode_steps=35, level_pool_size=5, checkpoint_steps=[1_057],
+                    )
+                    checkpoint = uninterrupted.with_name("seed_12_checkpoints") / "step_1057"
+                    resumed = train("snake", algorithm, 12, 1_113, root / "resumed", resume=checkpoint)
+                    self.assertEqual((uninterrupted / "train.csv").read_bytes(),
+                                     (resumed / "train.csv").read_bytes())
+                    expected = torch.load(uninterrupted / "model.pt", weights_only=True)
+                    actual = torch.load(resumed / "model.pt", weights_only=True)
+                    for key in expected:
+                        self.assertTrue(torch.equal(expected[key], actual[key]), key)
+
     def test_one_result_per_budget_and_seed_skip_and_overwrite(self):
         with TemporaryDirectory() as root:
             run = train("snake", "ppo", 42, 16, root)

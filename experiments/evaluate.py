@@ -52,8 +52,9 @@ def load_agent(run, env):
     return agent
 
 
-def evaluate(run, episodes, seed, *, game="snake", output=None):
-    env = make_env(game)
+def evaluate(run, episodes, seed, *, game="snake", output=None, max_episode_steps=None):
+    options = {} if max_episode_steps is None else {"max_episode_steps": max_episode_steps}
+    env = make_env(game, **options)
     rows = []
     try:
         agent = load_agent(run, env) if run is not None else None

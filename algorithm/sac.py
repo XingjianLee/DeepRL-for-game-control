@@ -31,7 +31,7 @@ class SAC:
     def predict(self, observation):
         return int(self.network(torch.from_numpy(observation)).argmax())
 
-    def train(self, env, steps, seed, on_episode):
+    def train(self, env, steps, seed, on_episode, *, checkpoints=None):
         rng = np.random.default_rng(seed)
         size, action_count = env.observation_space.shape[0], env.action_space.n
         critics = nn.ModuleList(action_network(size, action_count) for _ in range(2))
@@ -43,9 +43,16 @@ class SAC:
         target_entropy = 0.3 * log(action_count)
 
         replay = ReplayBuffer(env.observation_space.shape, 50_000)
-        obs, _ = env.reset(seed=seed)
-        episode_return, length = 0.0, 0
-        for step in range(1, steps + 1):
+        objects = dict(rng=rng, replay=replay, critics=critics, targets=targets,
+                       actor_optimizer=actor_optimizer, critic_optimizer=critic_optimizer,
+                       log_temperature=log_temperature, temperature_optimizer=temperature_optimizer)
+        if checkpoints:
+            obs, episode_return, length = checkpoints.start(env, seed, **objects)
+            start = checkpoints.step
+        else:
+            obs, _ = env.reset(seed=seed)
+            start, episode_return, length = 0, 0.0, 0
+        for step in range(start + 1, steps + 1):
             if step <= 1_000:
                 action = int(rng.integers(action_count))
             else:
@@ -99,3 +106,5 @@ class SAC:
                 on_episode(step, length, episode_return, info["score"])
                 obs, _ = env.reset()
                 episode_return, length = 0.0, 0
+            if checkpoints:
+                checkpoints.save(step, env, self.network, episode_return, length, **objects)
