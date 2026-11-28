@@ -21,6 +21,9 @@ class DQN:
     def predict(self, observation):
         return int(self.network(torch.from_numpy(observation)).argmax())
 
+    def next_q_values(self, next_states, target):
+        return target(next_states).amax(dim=1)
+
     def train(self, env, steps, seed, on_episode, *, checkpoints=None):
         rng = np.random.default_rng(seed)
         target = deepcopy(self.network)
@@ -52,7 +55,7 @@ class DQN:
                 states, actions, rewards, next_states, terminals = replay.sample(rng, batch_size)
                 chosen_q = self.network(states).gather(1, actions[:, None]).squeeze(1)
                 with torch.no_grad():
-                    next_q = target(next_states).amax(dim=1)
+                    next_q = self.next_q_values(next_states, target)
                     expected_q = td_targets(rewards, next_q, terminals, 0.99)
                 loss = F.smooth_l1_loss(chosen_q, expected_q)
                 optimizer.zero_grad()

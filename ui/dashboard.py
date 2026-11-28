@@ -107,9 +107,12 @@ class Dashboard:
         self.status = "准备就绪"
         self.issue = ""
         try:
-            if self.game not in self.envs:
-                self.envs[self.game] = make_env(self.game, render_mode="rgb_array")
-            self.env = self.envs[self.game]
+            spatial = bool(self.run and not self.manual and self.run.snake_spatial)
+            env_key = (self.game, spatial)
+            if env_key not in self.envs:
+                options = {"spatial_features": True} if spatial else {}
+                self.envs[env_key] = make_env(self.game, render_mode="rgb_array", **options)
+            self.env = self.envs[env_key]
             self.obs, info = self.env.reset(seed=self.seed)
             self.score = info.get("score", 0)
             self.render_frame()
@@ -320,8 +323,9 @@ class Dashboard:
         self.button((1145, 190, 67, 34), "人工", lambda: self.set_manual(True), selected=self.manual)
 
         available = {run.algorithm for run in self.options}
+        button_span = 444 // len(ALGORITHMS)
         for i, algorithm in enumerate(ALGORITHMS):
-            self.button((772 + i * 111, 240, 106, 35), algorithm.upper(),
+            self.button((772 + i * button_span, 240, button_span - 5, 35), algorithm.upper(),
                         lambda algorithm=algorithm: self.choose_algorithm(algorithm),
                         selected=algorithm == self.algorithm, enabled=algorithm in available)
 

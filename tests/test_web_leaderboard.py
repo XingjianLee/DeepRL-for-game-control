@@ -5,15 +5,32 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from ui.web import Lab
+from ui.web import Lab, Replay
 
 
 class WebLeaderboardTests(unittest.TestCase):
+    def test_model_replay_uses_saved_episode_limit(self):
+        with patch("ui.web.load_agent", return_value=SimpleNamespace(predict=lambda _: 0)):
+            for model, limit in (
+                (SimpleNamespace(path=Path("."), max_episode_steps=2_000, snake_spatial=False), 2_000),
+                (SimpleNamespace(path=Path("."), max_episode_steps=None, snake_spatial=False), 300),
+                (None, 300),
+            ):
+                with self.subTest(model=model):
+                    replay = Replay("snake", model, 20_000)
+                    try:
+                        self.assertEqual(replay.env.spec.max_episode_steps, limit)
+                    finally:
+                        replay.env.close()
+
     def test_finished_human_and_model_runs_share_seed_rankings(self):
         with TemporaryDirectory() as folder:
             root = Path(folder)
             lab = Lab(root, "snake", 42)
-            lab.runs["model"] = SimpleNamespace(game="snake", path=root, algorithm="ppo", steps=100, seed=7)
+            lab.runs["model"] = SimpleNamespace(
+                game="snake", path=root, algorithm="ppo", steps=100, seed=7,
+                max_episode_steps=None, snake_spatial=False,
+            )
             try:
                 for mode in ("manual", "ai"):
                     session = str(uuid4())

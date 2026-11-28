@@ -49,6 +49,17 @@ class LanderTests(unittest.TestCase):
 
 
 class SnakeTests(unittest.TestCase):
+    def test_spatial_observation_respects_walls_and_growth(self):
+        env = SnakeEnv(spatial_features=True)
+        obs, _ = env.reset(seed=0)
+        self.assertTrue(env.observation_space.contains(obs))
+        env.heading = 0
+        env.body = [(1, y) for y in range(10)] + [(2, 9)]
+        env.food = (2, 0)
+        # Left and right are isolated by the body. Only right eats and keeps the old tail.
+        np.testing.assert_allclose(env._observation()[107:113],
+                                   [0, 0, 9 / 99, 1, 78 / 99, 1])
+
     def test_food_distance_shaping_keeps_potential_on_time_limit(self):
         base = gym.make("Snake-v0", max_episode_steps=1)
         env = FoodDistanceReward(base)

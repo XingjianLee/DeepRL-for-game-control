@@ -1,6 +1,6 @@
 """Interactive playback with either keyboard input or a trained model."""
 
-from experiments.evaluate import load_agent, make_env
+from experiments.evaluate import load_agent, make_env, model_observation_options
 from games.lander import LANDER_GAMES
 from ui.controls import HEADINGS, THRUSTERS, lander_thrust, snake_turn
 
@@ -20,7 +20,7 @@ def play(game, run, seed):
                               "Up/Space: main engine | Left/Right: side engines",
                               "Up/Left/Right or Space"),
     }[game]
-    env = make_env(game, render_mode="human")
+    env = make_env(game, render_mode="human", **model_observation_options(game, run))
     try:
         agent = load_agent(run, env) if run is not None else None
         ready_title = f"{title} | {start_key} to start | Esc to quit"

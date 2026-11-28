@@ -49,7 +49,10 @@ class Replay:
         self.steps, self.total_reward = 0, 0.0
         self.reason = self.action = None
         self.done = False
-        self.env = make_env(game, render_mode="rgb_array")
+        options = {"max_episode_steps": run.max_episode_steps} if run and run.max_episode_steps else {}
+        if run and run.snake_spatial:
+            options["spatial_features"] = True
+        self.env = make_env(game, render_mode="rgb_array", **options)
         try:
             self.agent = load_agent(run.path, self.env) if run else None
             self.obs, info = self.env.reset(seed=seed)

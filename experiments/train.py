@@ -23,25 +23,29 @@ DEFAULT_CHECKPOINTS = (500_000, 1_000_000, 2_000_000, 3_000_000, 5_000_000)
 
 
 def train(game, algorithm, seed, steps, output_root, *, a2c_profile=None, overwrite=False,
-          max_episode_steps=None, level_pool_size=None, checkpoint_steps=None, resume=None):
+          max_episode_steps=None, level_pool_size=None, checkpoint_steps=None, resume=None,
+          snake_spatial=None):
     resume = Path(resume) if resume else None
     previous = json.loads((resume / "config.json").read_text()) if resume else None
     if previous:
         if (game, algorithm, seed) != tuple(previous[key] for key in ("game", "algorithm", "seed")):
             raise ValueError("Resume must use the same game, algorithm, and training seed.")
         for key, value in (("max_episode_steps", max_episode_steps), ("level_pool_size", level_pool_size),
-                           ("a2c_profile", a2c_profile)):
+                           ("a2c_profile", a2c_profile), ("snake_spatial", snake_spatial)):
             if value is not None and value != previous.get(key):
                 raise ValueError(f"Resume must keep {key} from the checkpoint.")
         max_episode_steps = previous.get("max_episode_steps")
         level_pool_size = previous.get("level_pool_size")
         a2c_profile = previous.get("a2c_profile")
+        snake_spatial = previous.get("snake_spatial")
         if steps <= previous["steps"]:
             raise ValueError("The total step budget must exceed the checkpoint step.")
     if a2c_profile is not None and (algorithm != "a2c" or a2c_profile not in A2C_PROFILES):
         raise ValueError("An A2C profile must be baseline or improved and requires A2C.")
     if game == "lander-continuous" and algorithm != "sac":
         raise ValueError("Continuous Lunar Lander requires SAC.")
+    if snake_spatial and game != "snake":
+        raise ValueError("Spatial features require the Snake environment.")
     if max_episode_steps is not None and max_episode_steps <= 0:
         raise ValueError("Episode limit must be positive.")
     if level_pool_size is not None and level_pool_size <= 0:
@@ -67,6 +71,7 @@ def train(game, algorithm, seed, steps, output_root, *, a2c_profile=None, overwr
             existing = json.loads((run / "config.json").read_text())
             if any(existing.get(key) != value for key, value in (
                     ("max_episode_steps", max_episode_steps), ("level_pool_size", level_pool_size),
+                    ("snake_spatial", True if snake_spatial else None),
                     ("resume_from_step", start if resume else None))):
                 raise ValueError(f"Different training settings exist at {run}. Use a separate --output-root.")
             print(f"Skipping existing result: {run}", flush=True)
@@ -79,7 +84,8 @@ def train(game, algorithm, seed, steps, output_root, *, a2c_profile=None, overwr
             if conflicts:
                 raise FileExistsError(f"Checkpoints already exist at {checkpoint_root}: {conflicts}")
             train_into(result, game, algorithm, seed, steps, a2c_profile,
-                       max_episode_steps, level_pool_size, milestones, checkpoint_root, resume, previous)
+                       max_episode_steps, level_pool_size, milestones, checkpoint_root, resume, previous,
+                       snake_spatial)
             if run.exists():
                 run.rename(backup)
             try:
@@ -95,7 +101,7 @@ def train(game, algorithm, seed, steps, output_root, *, a2c_profile=None, overwr
 
 
 def train_into(run, game, algorithm, seed, steps, a2c_profile, max_episode_steps,
-               level_pool_size, milestones, checkpoint_root, resume, previous):
+               level_pool_size, milestones, checkpoint_root, resume, previous, snake_spatial):
     improved = a2c_profile == "improved"
     config = {
         "game": game, "algorithm": algorithm, "seed": seed, "steps": steps,
@@ -110,6 +116,9 @@ def train_into(run, game, algorithm, seed, steps, a2c_profile, max_episode_steps
         config["a2c_profile"] = a2c_profile or "baseline"
     torch.manual_seed(seed)
     env_options = {} if max_episode_steps is None else {"max_episode_steps": max_episode_steps}
+    if snake_spatial:
+        env_options["spatial_features"] = True
+        config["snake_spatial"] = True
     env = make_env(game, **env_options)
     if improved and game == "snake":
         env = FoodDistanceReward(env)

@@ -111,10 +111,22 @@ python run.py play --algorithm dqn --seed 20000
 项目使用 12 维数值观测，动作是保持和扇翅，每局最多 3,600 步。
 游戏得分为通过的管道数，训练奖励沿用第三方环境定义。
 
+`ddqn` 是 Double DQN。它复用 DQN 的网络结构、奖励和训练设置。计算下一状态的价值时，
+Double DQN 由在线网络选择动作，再由目标网络估值。
+
 ```bash
 python run.py play --game flap
 python run.py train --game flap --algorithm ppo --steps 500000 --seed 42
 python run.py play --game flap --algorithm ppo --seed 20000
+```
+
+用同一批种子运行 DQN 和 Double DQN 对照：
+
+```bash
+python run.py train --game flap --algorithm dqn ddqn --steps 1000000 --seed 12 24 36 42 48 \
+  --max-episode-steps 2000 --level-pool-size 512 \
+  --checkpoint-steps 100000 200000 300000 400000 500000 600000 700000 800000 900000 1000000 \
+  --output-root runs-ddqn
 ```
 
 人工试玩时，点击窗口后按空格开始，之后每次按空格扇翅。按 R 重开，按 Esc 退出。

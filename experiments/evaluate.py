@@ -12,6 +12,7 @@ import torch
 import games  # Registers Snake-v0.
 from algorithm.a2c import A2C
 from algorithm.continuous_sac import ContinuousSAC
+from algorithm.ddqn import DoubleDQN
 from algorithm.dqn import DQN
 from algorithm.ppo import PPO
 from algorithm.sac import SAC
@@ -22,7 +23,7 @@ ENVIRONMENTS = {
     "snake": "Snake-v0", "flap": FLAP_ENV_ID,
     "lander": LANDER_ENV_ID, "lander-continuous": CONTINUOUS_ENV_ID,
 }
-ALGORITHMS = {"dqn": DQN, "ppo": PPO, "a2c": A2C, "sac": SAC}
+ALGORITHMS = {"dqn": DQN, "ppo": PPO, "a2c": A2C, "sac": SAC, "ddqn": DoubleDQN}
 
 
 def make_env(game, **kwargs):
@@ -31,6 +32,14 @@ def make_env(game, **kwargs):
     if game in LANDER_GAMES:
         return make_lander(continuous=game == "lander-continuous", **kwargs)
     return gym.make(ENVIRONMENTS[game], **kwargs)
+
+
+def model_observation_options(game, run):
+    if game == "snake" and run is not None:
+        config = json.loads((Path(run) / "config.json").read_text())
+        if config.get("snake_spatial") is True:
+            return {"spatial_features": True}
+    return {}
 
 
 def make_agent(algorithm, env):
@@ -54,7 +63,7 @@ def load_agent(run, env):
 
 def evaluate(run, episodes, seed, *, game="snake", output=None, max_episode_steps=None):
     options = {} if max_episode_steps is None else {"max_episode_steps": max_episode_steps}
-    env = make_env(game, **options)
+    env = make_env(game, **options, **model_observation_options(game, run))
     rows = []
     try:
         agent = load_agent(run, env) if run is not None else None
@@ -100,6 +109,11 @@ def evaluate(run, episodes, seed, *, game="snake", output=None, max_episode_step
               f" | out of bounds {outcomes['out_of_bounds'] / episodes:.1%}"
               f" | time limit {outcomes['time_limit'] / episodes:.1%}")
     else:
-        print(f"{label} | {episodes} episodes | score {scores.mean():.2f} ± {scores.std():.2f}"
-              f" | max {scores.max()}")
+        summary = f"{label} | {episodes} episodes | score {scores.mean():.2f} ± {scores.std():.2f} | max {scores.max()}"
+        if game == "snake":
+            completed = [row["steps"] for row in rows if row["reason"] == "board_full"]
+            summary += f" | 60+ apples {(scores >= 60).mean():.1%} | board full {len(completed) / episodes:.1%}"
+            if completed:
+                summary += f" | median completion steps {np.median(completed):g}"
+        print(summary)
     return rows

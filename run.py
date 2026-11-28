@@ -52,6 +52,8 @@ def main():
     training.add_argument("--seed", type=nonnegative, nargs="+", default=[42])
     training.add_argument("--max-episode-steps", type=positive, help="Override the per-episode time limit")
     training.add_argument("--level-pool-size", type=positive, help="Rotate through this many fixed environment seeds")
+    training.add_argument("--snake-spatial", action="store_true", default=None,
+                          help="Add reachability and tail connectivity features for Snake")
     training.add_argument("--checkpoint-steps", type=positive, nargs="+", help="Save at these total interaction counts")
     training.add_argument("--resume", type=run_directory, help="Continue from a checkpoint directory")
     training.add_argument("--output-root", type=Path, default=RUNS)
@@ -102,6 +104,8 @@ def main():
 
         launch(args.runs, args.game, args.seed)
     elif args.command == "train":
+        if args.snake_spatial and any(game != "snake" for game in args.game):
+            training.error("--snake-spatial only supports --game snake")
         pairs = list(product(args.game, args.algorithm))
         jobs = [(game, algorithm, steps, seed) for game, algorithm in pairs
                 if game != "lander-continuous" or algorithm == "sac"
@@ -124,7 +128,7 @@ def main():
                 train(game, algorithm, seed, steps, args.output_root,
                       a2c_profile=profile, overwrite=args.overwrite,
                       max_episode_steps=args.max_episode_steps, level_pool_size=args.level_pool_size,
-                      checkpoint_steps=args.checkpoint_steps, resume=args.resume)
+                      checkpoint_steps=args.checkpoint_steps, resume=args.resume, snake_spatial=args.snake_spatial)
             except (ValueError, FileExistsError) as error:
                 training.error(str(error))
     elif args.command == "evaluate":

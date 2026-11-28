@@ -9,6 +9,7 @@ import numpy as np
 
 from algorithm.actor_critic import generalized_advantage
 from algorithm.continuous_sac import SquashedGaussian
+from algorithm.ddqn import DoubleDQN
 from algorithm.dqn import td_targets
 from algorithm.sac import soft_value
 from experiments.evaluate import evaluate, load_agent, make_agent, make_env
@@ -24,6 +25,14 @@ class AlgorithmTests(unittest.TestCase):
         target = td_targets(torch.tensor([1.0, 1.0]), torch.tensor([4.0, 4.0]),
                             torch.tensor([True, False]), 0.5)
         torch.testing.assert_close(target, torch.tensor([1.0, 3.0]))
+
+    def test_double_dqn_selects_online_and_values_with_target(self):
+        agent = DoubleDQN(2, 2)
+        agent.network = torch.nn.Identity()
+        next_states = torch.tensor([[4.0, 1.0], [2.0, 3.0]])
+        target_values = torch.tensor([[2.0, 9.0], [10.0, 3.0]])
+        values = agent.next_q_values(next_states, lambda _: target_values)
+        torch.testing.assert_close(values, torch.tensor([2.0, 3.0]))
 
     def test_sac_soft_value_averages_over_all_actions_with_entropy(self):
         probs = torch.tensor([[0.25, 0.75]])
@@ -109,7 +118,7 @@ class AlgorithmTests(unittest.TestCase):
     def test_checkpoint_resume_matches_uninterrupted_training(self):
         with TemporaryDirectory() as root:
             root = Path(root)
-            for algorithm in ("ppo", "a2c", "dqn", "sac"):
+            for algorithm in ("ppo", "a2c", "dqn", "sac", "ddqn"):
                 with self.subTest(algorithm=algorithm):
                     uninterrupted = train(
                         "snake", algorithm, 12, 1_113, root / "full",

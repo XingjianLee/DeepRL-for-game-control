@@ -67,6 +67,8 @@ class Run:
     steps: int
     shaped: bool
     completed_at: str
+    max_episode_steps: int | None = None
+    snake_spatial: bool = False
 
     @cached_property
     def training(self):
@@ -111,7 +113,11 @@ def load_runs(root, environments, algorithms):
             if relative != (game, algorithm, f"step_{steps}", f"seed_{seed}"):
                 continue
             shaped = game == "snake" and algorithm == "a2c" and config.get("a2c_profile") == "improved"
-            runs.append(Run(path.parent, game, algorithm, seed, steps, shaped, completed_at))
+            limit = config.get("max_episode_steps")
+            if type(limit) is not int or limit <= 0:
+                limit = None
+            runs.append(Run(path.parent, game, algorithm, seed, steps, shaped, completed_at, limit,
+                            game == "snake" and config.get("snake_spatial") is True))
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return sorted(runs, key=lambda run: run.completed_at, reverse=True)
@@ -121,7 +127,8 @@ def comparable_runs(runs, selected, evaluation):
     """Group compatible saved runs by algorithm while retaining one run per training seed."""
     groups = {}
     for run in runs:
-        if (run.game, run.steps, run.shaped) != (selected.game, selected.steps, selected.shaped):
+        if (run.game, run.steps, run.shaped, run.snake_spatial) != (
+                selected.game, selected.steps, selected.shaped, selected.snake_spatial):
             continue
         for candidate in run.evaluations:
             if (candidate.filename, candidate.seeds) == (evaluation.filename, evaluation.seeds):
